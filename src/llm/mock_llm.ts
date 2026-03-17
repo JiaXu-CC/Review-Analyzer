@@ -119,9 +119,11 @@ export class MockLLMClient implements LLMClient {
     const updatedThemes = themes.map((theme) => {
       const relatedUnits = unitsByTheme.get(theme.theme_name) ?? [];
       const examples = relatedUnits.slice(0, 3).map((u) => u.unit_text);
+      // 在 mock 路径中也保证 key_points 存在且为中文来源（直接使用示例文本）
       return {
         ...theme,
         representative_examples: examples,
+        key_points: examples,
       };
     });
 

@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "tsx",
     "run:pipeline": "tsx scripts/run_pipeline.ts",
-    "apply:feedback": "tsx scripts/apply_feedback.ts"
+    "apply:feedback": "tsx scripts/apply_feedback.ts",
+    "test:ark": "tsx scripts/test_ark.ts"
   },
   "keywords": [],
   "author": "",

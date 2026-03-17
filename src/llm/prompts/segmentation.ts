@@ -20,8 +20,16 @@ VERY IMPORTANT RULES:
 6. You MUST NOT invent content that is not present in the review.
 7. Low-information or neutral reviews can have an empty "units" array.
 8. Mixed reviews can and should produce multiple units with different polarity and/or themes. Do NOT represent mixed sentiment with a single unit or a custom polarity label.
-9. Do NOT mechanically split by punctuation; split by meaning.
-10. If the same theme is mentioned multiple times in one review, try to MERGE them into a single unit by:
+9. ONLY extract units that contain a concrete, analyzable product feedback point (e.g. about price, quality, performance, UI, customer service, logistics, etc.).
+10. Do NOT output units for pure emotional venting, insults, or content without a clear product-related aspect.
+    Examples that must NOT produce any unit:
+    - "这个老游戏，赶紧给老子倒闭"
+    - "垃圾"
+    - "无语"
+    - "服了"
+11. If a sentence has strong emotion but no specific product aspect, treat it as low-information and skip it.
+12. Do NOT mechanically split by punctuation; split by meaning.
+13. If the same theme is mentioned multiple times in one review, try to MERGE them into a single unit by:
     - combining the key information into one "unit_text"
     - setting "emotion_intensity" based on the strongest emotion.
 

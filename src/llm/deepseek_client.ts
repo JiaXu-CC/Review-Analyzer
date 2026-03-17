@@ -32,25 +32,25 @@ import { extractJsonString } from "./utils/extract_json";
 import { isChineseText, allChineseLines } from "./utils/text_language";
 
 function getModel() {
-  const model = process.env.OPENAI_MODEL;
+  const model = process.env.DEEPSEEK_MODEL;
   if (!model) {
-    throw new Error("OPENAI_MODEL is not set");
+    throw new Error("DEEPSEEK_MODEL is not set");
   }
   return model;
 }
 
-async function callOpenAIChat(
+async function callDeepSeekChat(
   payload: unknown,
   stage: string,
 ): Promise<unknown> {
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = process.env.DEEPSEEK_API_KEY;
   if (!apiKey) {
-    throw new Error("OPENAI_API_KEY is not set");
+    throw new Error("DEEPSEEK_API_KEY is not set");
   }
 
-  const base = process.env.OPENAI_BASE_URL;
+  const base = process.env.DEEPSEEK_BASE_URL;
   if (!base) {
-    throw new Error("OPENAI_BASE_URL is not set");
+    throw new Error("DEEPSEEK_BASE_URL is not set");
   }
 
   const baseUrl = base.replace(/\/+$/, "");
@@ -67,7 +67,7 @@ async function callOpenAIChat(
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new Error(
-      `OpenAI API error: ${res.status} ${res.statusText} - ${text}`,
+      `DeepSeek API error: ${res.status} ${res.statusText} - ${text}`,
     );
   }
 
@@ -77,7 +77,7 @@ async function callOpenAIChat(
 
   const content = data.choices?.[0]?.message?.content;
   if (!content) {
-    throw new Error(`OpenAI API returned empty content for stage=${stage}`);
+    throw new Error(`DeepSeek API returned empty content for stage=${stage}`);
   }
 
   const rawText = typeof content === "string" ? content : String(content);
@@ -86,7 +86,7 @@ async function callOpenAIChat(
   if (!extracted.json) {
     // eslint-disable-next-line no-console
     console.error(
-      `[llm][${stage}] failed to extract JSON. raw (first 1000 chars):`,
+      `[deepseek][${stage}] failed to extract JSON. raw (first 1000 chars):`,
       rawText.slice(0, 1000),
     );
     throw new Error(`Failed to extract JSON content for stage=${stage}`);
@@ -96,14 +96,14 @@ async function callOpenAIChat(
     const parsed = JSON.parse(extracted.json) as unknown;
     // eslint-disable-next-line no-console
     console.debug?.(
-      `[llm][${stage}] parsed JSON preview (first 1000 chars):`,
+      `[deepseek][${stage}] parsed JSON preview (first 1000 chars):`,
       JSON.stringify(parsed).slice(0, 1000),
     );
     return parsed;
   } catch (parseErr) {
     // eslint-disable-next-line no-console
     console.error(
-      `[llm][${stage}] JSON.parse failed. extracted (first 1000 chars):`,
+      `[deepseek][${stage}] JSON.parse failed. extracted (first 1000 chars):`,
       extracted.json.slice(0, 1000),
     );
     throw new Error(
@@ -137,7 +137,7 @@ function guessPolarityFromText(text: string): "positive" | "negative" | null {
   return null;
 }
 
-export class OpenAILLMClient implements LLMClient {
+export class DeepSeekLLMClient implements LLMClient {
   private readonly fallback = new MockLLMClient();
 
   async analyzeSentiment(
@@ -182,7 +182,7 @@ export class OpenAILLMClient implements LLMClient {
         temperature: 0.1,
       };
 
-      const raw = await callOpenAIChat(payload, "review_sentiment");
+      const raw = await callDeepSeekChat(payload, "review_sentiment");
       const parsed = ReviewSentimentArraySchema.safeParse(raw);
       if (!parsed.success) {
         throw new Error(
@@ -215,7 +215,7 @@ export class OpenAILLMClient implements LLMClient {
     } catch (err) {
       // eslint-disable-next-line no-console
       console.warn(
-        `OpenAI review sentiment failed, falling back to mock. Reason: ${(err as Error).message}`,
+        `DeepSeek review sentiment failed, falling back to mock. Reason: ${(err as Error).message}`,
       );
       return this.fallback.analyzeSentiment(reviews, units);
     }
@@ -245,14 +245,8 @@ export class OpenAILLMClient implements LLMClient {
         temperature: 0.2,
       };
 
-      const raw = await callOpenAIChat(payload, "segmentation");
-      // eslint-disable-next-line no-console
-      console.debug?.(
-        "[segmentation] raw content (first 1000 chars):",
-        JSON.stringify(raw).slice(0, 1000),
-      );
+      const raw = await callDeepSeekChat(payload, "segmentation");
 
-      // 先按 item/unit 级别做规范化，尽量避免整批失败
       const normalizedItems: SegmentationResultItem[] = [];
       if (Array.isArray(raw)) {
         raw.forEach((item, itemIndex) => {
@@ -290,7 +284,7 @@ export class OpenAILLMClient implements LLMClient {
               if (!polarity) {
                 // eslint-disable-next-line no-console
                 console.warn(
-                  `[segmentation] drop unit due to unresolvable polarity. review_id=${anyItem.review_id}, itemIndex=${itemIndex}, unitIndex=${unitIndex}`,
+                  `[deepseek][segmentation] drop unit due to unresolvable polarity. review_id=${anyItem.review_id}, itemIndex=${itemIndex}, unitIndex=${unitIndex}`,
                 );
                 return null;
               }
@@ -304,7 +298,6 @@ export class OpenAILLMClient implements LLMClient {
               ) {
                 intensity = anyUnit.emotion_intensity;
               } else {
-                // fallback 简单用情绪关键词强度估计，至少为 1
                 intensity = 3;
               }
 
@@ -324,12 +317,6 @@ export class OpenAILLMClient implements LLMClient {
           });
         });
       }
-
-      // eslint-disable-next-line no-console
-      console.debug?.(
-        "[segmentation] normalized (first 1000 chars):",
-        JSON.stringify(normalizedItems).slice(0, 1000),
-      );
 
       const parsed = SegmentationResultArraySchema.safeParse(normalizedItems);
       if (!parsed.success) {
@@ -365,7 +352,7 @@ export class OpenAILLMClient implements LLMClient {
     } catch (err) {
       // eslint-disable-next-line no-console
       console.warn(
-        `OpenAI segmentation failed, falling back to mock. Reason: ${(err as Error).message}`,
+        `DeepSeek segmentation failed, falling back to mock. Reason: ${(err as Error).message}`,
       );
       return this.fallback.segmentReviews(reviews);
     }
@@ -397,7 +384,7 @@ export class OpenAILLMClient implements LLMClient {
         temperature: 0.2,
       };
 
-      const raw = await callOpenAIChat(payload, "theme_generation");
+      const raw = await callDeepSeekChat(payload, "theme_generation");
       const parsed = ThemeGenerationOutputSchema.safeParse(raw);
       if (!parsed.success) {
         throw new Error(
@@ -440,7 +427,7 @@ export class OpenAILLMClient implements LLMClient {
     } catch (err) {
       // eslint-disable-next-line no-console
       console.warn(
-        `OpenAI theme generation failed, falling back to mock. Reason: ${(err as Error).message}`,
+        `DeepSeek theme generation failed, falling back to mock. Reason: ${(err as Error).message}`,
       );
       return this.fallback.generateThemes(units);
     }
@@ -479,7 +466,7 @@ export class OpenAILLMClient implements LLMClient {
         temperature: 0.2,
       };
 
-      const raw = await callOpenAIChat(payload, "theme_summary");
+      const raw = await callDeepSeekChat(payload, "theme_summary");
       const parsed = ThemeSummaryArraySchema.safeParse(
         (raw as { themes?: unknown }).themes ?? raw,
       );
@@ -515,7 +502,7 @@ export class OpenAILLMClient implements LLMClient {
     } catch (err) {
       // eslint-disable-next-line no-console
       console.warn(
-        `OpenAI theme summary failed, falling back to mock. Reason: ${(err as Error).message}`,
+        `DeepSeek theme summary failed, falling back to mock. Reason: ${(err as Error).message}`,
       );
       return this.fallback.summarizeThemes(themes, units);
     }
@@ -553,7 +540,7 @@ export class OpenAILLMClient implements LLMClient {
         temperature: 0.2,
       };
 
-      const raw = await callOpenAIChat(payload, "reclassification");
+      const raw = await callDeepSeekChat(payload, "reclassification");
       if (!Array.isArray(raw)) {
         throw new Error("Reclassification response is not an array");
       }
@@ -605,11 +592,10 @@ export class OpenAILLMClient implements LLMClient {
     } catch (err) {
       // eslint-disable-next-line no-console
       console.warn(
-        `OpenAI reclassification failed, falling back to mock. Reason: ${(err as Error).message}`,
+        `DeepSeek reclassification failed, falling back to mock. Reason: ${(err as Error).message}`,
       );
       return this.fallback.reclassifyUnits(units, themes);
     }
   }
 }
-
 
