@@ -1,0 +1,31 @@
+{
+  "segmentation": [],
+  "theme_set": {
+    "is_theme_set_correct": false,
+    "actions": [
+      {
+        "type": "rename",
+        "from": "general",
+        "to": "overall_experience"
+      },
+      {
+        "type": "merge",
+        "from": ["pricing", "quality"],
+        "to": "value_for_money"
+      },
+      {
+        "type": "delete",
+        "theme": "delivery"
+      }
+    ]
+  },
+  "unit_themes": [
+    {
+      "unit_id": "DUMMY_UNIT_ID",
+      "current_theme": "overall_experience",
+      "is_correct": false,
+      "target_theme": "value_for_money"
+    }
+  ]
+}
+

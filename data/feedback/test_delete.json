@@ -1,0 +1,11 @@
+{
+  "theme_set": {
+    "is_theme_set_correct": false,
+    "actions": [
+      {
+        "type": "delete",
+        "theme": "quality"
+      }
+    ]
+  }
+}

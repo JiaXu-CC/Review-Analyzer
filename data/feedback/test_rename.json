@@ -1,0 +1,12 @@
+{
+  "theme_set": {
+    "is_theme_set_correct": false,
+    "actions": [
+      {
+        "type": "rename",
+        "from": "general",
+        "to": "overall_experience"
+      }
+    ]
+  }
+}
