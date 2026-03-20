@@ -7,7 +7,9 @@
     "dev": "tsx",
     "run:pipeline": "tsx scripts/run_pipeline.ts",
     "apply:feedback": "tsx scripts/apply_feedback.ts",
-    "test:ark": "tsx scripts/test_ark.ts"
+    "test:ark": "tsx scripts/test_ark.ts",
+    "build:report-payload": "tsx scripts/build_report_payload.ts",
+    "build:visualization-preview": "tsx scripts/build_visualization_preview.ts"
   },
   "keywords": [],
   "author": "",

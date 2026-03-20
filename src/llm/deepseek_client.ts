@@ -385,45 +385,159 @@ export class DeepSeekLLMClient implements LLMClient {
       };
 
       const raw = await callDeepSeekChat(payload, "theme_generation");
-      const parsed = ThemeGenerationOutputSchema.safeParse(raw);
-      if (!parsed.success) {
-        throw new Error(
-          `Failed to parse theme generation response: ${parsed.error.message}`,
+
+      const parsedObj = ThemeGenerationOutputSchema.safeParse(raw);
+      if (parsedObj.success) {
+        const output: ThemeGenerationOutput = parsedObj.data;
+
+        const allChineseThemeNames = output.themes.every((t) =>
+          isChineseText(t.theme_name),
         );
+        if (!allChineseThemeNames) {
+          throw new Error("Theme generation produced non-Chinese theme_name");
+        }
+        const themes: Theme[] = output.themes.map((t, index) => ({
+          theme_id: generateId(`theme_${index}`),
+          theme_name: t.theme_name,
+          representative_examples: [],
+        }));
+
+        const themesSet = new Set(output.themes.map((t) => t.theme_name));
+
+        const unitsWithThemes: ReviewUnit[] = units.map((u) => {
+          const mapped = output.units.find(
+            (ou) =>
+              ou.review_id === u.review_id &&
+              ou.unit_text === u.unit_text &&
+              ou.polarity === u.polarity,
+          );
+          const themeName =
+            mapped && themesSet.has(mapped.theme) ? mapped.theme : u.theme;
+          return {
+            ...u,
+            theme: themeName,
+          };
+        });
+
+        return { themes, units: unitsWithThemes };
       }
 
-      const output: ThemeGenerationOutput = parsed.data;
+      // Fallback: some models return an array instead of { themes, units } object.
+      if (Array.isArray(raw)) {
+        const arr = raw as unknown[];
 
-      const allChineseThemeNames = output.themes.every((t) =>
-        isChineseText(t.theme_name),
+        const looksLikeUnitAssignments = arr.some(
+          (x) =>
+            x &&
+            typeof x === "object" &&
+            "review_id" in x &&
+            "unit_text" in x,
+        );
+        const looksLikeThemeList = arr.some(
+          (x) => x && typeof x === "object" && "theme_name" in x,
+        );
+
+        let themes: Theme[] = [];
+        let unitsWithThemes: ReviewUnit[] = [];
+
+        if (looksLikeUnitAssignments) {
+          const assignments = arr.filter(
+            (x): x is {
+              review_id: unknown;
+              unit_text: unknown;
+              polarity: unknown;
+              theme: unknown;
+            } =>
+              !!x &&
+              typeof x === "object" &&
+              typeof (x as any).review_id === "string" &&
+              typeof (x as any).unit_text === "string" &&
+              typeof (x as any).polarity === "string" &&
+              typeof (x as any).theme === "string",
+          );
+
+          const uniqueThemeNamesInOrder: string[] = [];
+          for (const a of assignments) {
+            const tn = a.theme as string;
+            if (!uniqueThemeNamesInOrder.includes(tn))
+              uniqueThemeNamesInOrder.push(tn);
+          }
+          if (uniqueThemeNamesInOrder.length === 0) {
+            throw new Error("Theme generation array had no usable assignments");
+          }
+
+          if (
+            !uniqueThemeNamesInOrder.every((name) => isChineseText(name))
+          ) {
+            throw new Error("Theme generation array produced non-Chinese theme_name");
+          }
+
+          themes = uniqueThemeNamesInOrder.map((name, index) => ({
+            theme_id: generateId(`theme_${index}`),
+            theme_name: name,
+            representative_examples: [],
+          }));
+          const themesSet = new Set(uniqueThemeNamesInOrder);
+
+          unitsWithThemes = units.map((u) => {
+            const mapped = assignments.find(
+              (a) =>
+                (a.review_id as string) === u.review_id &&
+                (a.unit_text as string) === u.unit_text &&
+                (a.polarity as string) === u.polarity,
+            );
+            const themeName =
+              mapped && themesSet.has(mapped.theme as string)
+                ? (mapped.theme as string)
+                : u.theme;
+            return { ...u, theme: themeName };
+          });
+        } else if (looksLikeThemeList) {
+          const themeList = arr
+            .filter(
+              (x): x is { theme_name: unknown } =>
+                !!x &&
+                typeof x === "object" &&
+                typeof (x as any).theme_name === "string",
+            )
+            .map((x) => ({ theme_name: (x as any).theme_name as string }));
+
+          const themeNames = themeList.map((t) => t.theme_name);
+          const uniqueThemeNamesInOrder = Array.from(new Set(themeNames));
+          if (uniqueThemeNamesInOrder.length === 0) {
+            throw new Error("Theme generation array had no usable theme_name");
+          }
+          if (
+            !uniqueThemeNamesInOrder.every((name) => isChineseText(name))
+          ) {
+            throw new Error("Theme generation array produced non-Chinese theme_name");
+          }
+
+          themes = uniqueThemeNamesInOrder.map((name, index) => ({
+            theme_id: generateId(`theme_${index}`),
+            theme_name: name,
+            representative_examples: [],
+          }));
+          const themesSet = new Set(uniqueThemeNamesInOrder);
+          const fallbackThemeName = uniqueThemeNamesInOrder[0];
+
+          unitsWithThemes = units.map((u) => {
+            if (u.theme === "other") return { ...u, theme: "other" };
+            const mappedTheme = themesSet.has(u.theme) ? u.theme : fallbackThemeName;
+            return { ...u, theme: mappedTheme };
+          });
+        } else {
+          throw new Error(
+            "Theme generation response is an array but shape is unrecognized",
+          );
+        }
+
+        return { themes, units: unitsWithThemes };
+      }
+
+      throw new Error(
+        `Failed to parse theme generation response: not an object/array compatible format`,
       );
-      if (!allChineseThemeNames) {
-        throw new Error("Theme generation produced non-Chinese theme_name");
-      }
-      const themes: Theme[] = output.themes.map((t, index) => ({
-        theme_id: generateId(`theme_${index}`),
-        theme_name: t.theme_name,
-        representative_examples: [],
-      }));
-
-      const themesSet = new Set(output.themes.map((t) => t.theme_name));
-
-      const unitsWithThemes: ReviewUnit[] = units.map((u) => {
-        const mapped = output.units.find(
-          (ou) =>
-            ou.review_id === u.review_id &&
-            ou.unit_text === u.unit_text &&
-            ou.polarity === u.polarity,
-        );
-        const themeName =
-          mapped && themesSet.has(mapped.theme) ? mapped.theme : u.theme;
-        return {
-          ...u,
-          theme: themeName,
-        };
-      });
-
-      return { themes, units: unitsWithThemes };
     } catch (err) {
       // eslint-disable-next-line no-console
       console.warn(
@@ -476,15 +590,37 @@ export class DeepSeekLLMClient implements LLMClient {
         );
       }
 
-      const allChineseKeyPoints = parsed.data.every((item) =>
-        item.key_points ? allChineseLines(item.key_points) : true,
+      const dataWithNormalizedKeyPoints: ThemeSummaryItem[] = parsed.data.map(
+        (item) => {
+          if (!item.key_points) return item;
+          const cleaned = item.key_points
+            .map((s) => (typeof s === "string" ? s.trim() : ""))
+            .filter((s) => s.length > 0);
+          return { ...item, key_points: cleaned };
+        },
       );
-      if (!allChineseKeyPoints) {
+
+      const failing = dataWithNormalizedKeyPoints.find((item) => {
+        if (!item.key_points) return false;
+        if (!item.key_points.length) return true;
+        return !allChineseLines(item.key_points);
+      });
+      if (failing) {
+        const badLines = failing.key_points
+          ? failing.key_points.filter((line) => !isChineseText(line))
+          : [];
+        const hasEnglish = badLines.map((l) => /[A-Za-z]/.test(l));
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[llm][theme_summary] non-Chinese key_points detected. theme_id=${failing.theme_id} theme_name=${failing.theme_name} badLines=${JSON.stringify(
+            badLines.slice(0, 4),
+          )} hasEnglishFlags=${JSON.stringify(hasEnglish)}`,
+        );
         throw new Error("Theme summary produced non-Chinese key_points");
       }
 
       const byId = new Map<string, ThemeSummaryItem>();
-      for (const item of parsed.data) {
+      for (const item of dataWithNormalizedKeyPoints) {
         byId.set(item.theme_id, item);
       }
 
