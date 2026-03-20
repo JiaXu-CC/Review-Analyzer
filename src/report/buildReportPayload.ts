@@ -158,9 +158,14 @@ export function buildReportPayloadFromSession(
       : undefined;
 
   // --- sample_overview: timeline distributions (模块3) ---
+  // 独立于模块4「跨时间分析」：只要有可用 date 就生成，不依赖 enable_time_analysis。
+  // 粒度：config.time_granularity 为 quarter 则按季，否则默认按月（含未配置时）。
   let timelineCurve: unknown = undefined;
   let timelineBar: unknown = undefined;
-  if (timeCoverage && timeGranularity) {
+  const module3Granularity: TimeGranularity =
+    timeGranularity === "quarter" ? "quarter" : "month";
+
+  if (validReviewsWithDate.length > 0) {
     const startD = validReviewsWithDate.reduce((min, r) =>
       r.d!.getTime() < min.d!.getTime() ? r : min,
     ).d;
@@ -168,17 +173,17 @@ export function buildReportPayloadFromSession(
       r.d!.getTime() > max.d!.getTime() ? r : max,
     ).d;
 
-    const buckets = listBuckets(startD!, endD!, timeGranularity);
+    const buckets = listBuckets(startD!, endD!, module3Granularity);
     const counts = buckets.map((b) => {
       const n = validReviewsWithDate.filter(
-        (r) => getTimeBucketKey(r.d!, timeGranularity) === b,
+        (r) => getTimeBucketKey(r.d!, module3Granularity) === b,
       ).length;
       return n;
     });
     const smoothed = movingAverage(counts, 3);
 
     timelineCurve = {
-      granularity: timeGranularity,
+      granularity: module3Granularity,
       points: buckets.map((b, i) => ({
         bucket: b,
         count: counts[i],
@@ -186,7 +191,7 @@ export function buildReportPayloadFromSession(
       })),
     };
     timelineBar = {
-      granularity: timeGranularity,
+      granularity: module3Granularity,
       buckets: buckets.map((b, i) => ({
         bucket: b,
         count: counts[i],
@@ -523,6 +528,14 @@ export function buildReportPayloadFromSession(
     sample_overview: {
       sample_count: session.reviews.length,
       time_coverage: timeCoverage,
+      /** 每条评论发布时间（UTC 毫秒），供可视化层绘制连续时间轴趋势（与柱状离散粒度解耦） */
+      ...(validReviewsWithDate.length > 0
+        ? {
+            review_publish_times_ms: validReviewsWithDate
+              .map((r) => r.d!.getTime())
+              .sort((a, b) => a - b),
+          }
+        : {}),
       review_time_distribution_curve: timelineCurve,
       review_time_distribution_bar: timelineBar,
     },

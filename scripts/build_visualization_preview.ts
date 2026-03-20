@@ -23,8 +23,18 @@ async function main() {
 
   const reportPayloadPath = path.join(sessionDir, "report_payload.json");
   const reportPayload = await readJsonFile<unknown>(reportPayloadPath);
+  const reportCopyPath = path.join(sessionDir, "report_copy.json");
+  let reportCopy: Record<string, unknown> = {};
+  try {
+    reportCopy = await readJsonFile<Record<string, unknown>>(reportCopyPath);
+  } catch {
+    reportCopy = {};
+  }
 
-  const html = buildVisualizationPreviewHtml(reportPayload as Record<string, unknown>);
+  const html = buildVisualizationPreviewHtml(
+    reportPayload as Record<string, unknown>,
+    reportCopy,
+  );
   const outPath = path.join(sessionDir, "visualization_preview.html");
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const fs = await import("node:fs/promises");
